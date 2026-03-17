@@ -1,0 +1,39 @@
+# ─── Secrets — NEVER commit these ────────────────────────────────────────────
+.env
+*.env
+secrets/
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# ─── ML model weights (large binary files — use object storage in prod) ───────
+backend/models/saved/*.pt
+backend/models/saved/*.pth
+
+# ─── Temp uploads ─────────────────────────────────────────────────────────────
+temp_uploads/
+
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Docker volumes (local dev) ──────────────────────────────────────────────
+pgdata/
+neo4jdata/

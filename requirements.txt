@@ -1,0 +1,35 @@
+# Web Framework & API
+fastapi==0.109.0
+uvicorn==0.27.0
+python-multipart==0.0.6  # For dataset uploads
+pydantic==2.5.3
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.3
+scikit-learn==1.4.0
+
+# Graph Processing & Algorithms
+networkx==3.2.1
+igraph==0.11.3
+cdlib==0.3.0
+leidenalg==0.10.2  # Required for Leiden in cdlib
+
+# Machine Learning (PyTorch & PyG)
+torch==2.2.0
+torch_geometric==2.4.0
+# Note: DGL can be used instead of PyG depending on preference, 
+# but PyG is highly integrated with standard PyTorch.
+
+# Database Drivers & ORM
+neo4j==5.16.0
+SQLAlchemy==2.0.25
+psycopg2-binary==2.9.9
+alembic==1.13.1  # For PostgreSQL migrations
+
+# Background Tasks & Distributed Processing (Crucial for scaling)
+celery==5.3.6
+redis==5.0.1
+
+# Observability
+prometheus-fastapi-instrumentator==6.1.0

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: graphnebula
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/YOUR_ORG/graphnebula-backend:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - backend.worker.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=2
+            - --queues=celery
+          envFrom:
+            - secretRef:
+                name: graphnebula-secrets
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/backend/models/saved
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              # ML training is CPU/memory heavy
+              cpu: "4"
+              memory: "8Gi"
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-pvc
+---
+# Scale workers based on queue depth (requires KEDA or custom metric)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-hpa
+  namespace: graphnebula
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: celery-worker
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

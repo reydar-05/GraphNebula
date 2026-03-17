@@ -1,0 +1,187 @@
+name: CI/CD — Build, Test, Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/graphnebula-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/graphnebula-frontend
+
+jobs:
+  # ─── Job 1: Lint & Test Backend ─────────────────────────────────────────────
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: graphuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: graphdb_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U graphuser"
+          --health-interval 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-asyncio httpx
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://graphuser:testpassword@localhost:5432/graphdb_test
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_PASSWORD: testpassword
+          REDIS_HOST: localhost
+          REDIS_URL: redis://localhost:6379/0
+          ALLOWED_ORIGINS: http://localhost:5173
+        run: pytest tests/ -v --tb=short
+
+  # ─── Job 2: Lint Frontend ────────────────────────────────────────────────────
+  test-frontend:
+    name: Lint & Build Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (verify no compile errors)
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: http://localhost:8000
+
+  # ─── Job 3: Build & Push Docker Images ──────────────────────────────────────
+  build-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    # Only push on main branch, not on PRs
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set up Docker Buildx (for multi-platform / layer cache)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:cache,mode=max
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          build-args: |
+            VITE_API_BASE_URL=https://your-production-domain.com/api
+          cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:cache
+          cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:cache,mode=max
+
+  # ─── Job 4: Deploy to Kubernetes ─────────────────────────────────────────────
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        # Store your base64-encoded kubeconfig in GitHub Secrets as KUBECONFIG_B64
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update image tags to SHA
+        # Pin deployments to the exact commit SHA — no "latest" in production
+        run: |
+          kubectl set image deployment/backend \
+            backend=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            -n graphnebula
+          kubectl set image deployment/celery-worker \
+            worker=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            -n graphnebula
+          kubectl set image deployment/frontend \
+            frontend=${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            -n graphnebula
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/backend -n graphnebula --timeout=120s
+          kubectl rollout status deployment/celery-worker -n graphnebula --timeout=180s
+          kubectl rollout status deployment/frontend -n graphnebula --timeout=60s
+
+      - name: Run database migrations
+        # Execute Alembic migrations as a one-shot Job after each deploy
+        run: |
+          kubectl run alembic-migrate \
+            --image=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --restart=Never \
+            --rm=true \
+            --attach=true \
+            --env-from=secret/graphnebula-secrets \
+            -n graphnebula \
+            -- alembic upgrade head

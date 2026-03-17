@@ -1,0 +1,92 @@
+{
+  "title": "GraphNebula — Production Overview",
+  "uid": "graphnebula-prod",
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"graphnebula-backend\"}[1m])",
+          "legendFormat": "{{method}} {{handler}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "API p95 Latency (ms)",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"graphnebula-backend\"}[5m])) * 1000",
+          "legendFormat": "p95 {{handler}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Celery Task Queue Depth",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "celery_tasks_waiting{job=\"celery-workers\"}",
+          "legendFormat": "Pending Tasks"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Active Celery Workers",
+      "type": "stat",
+      "gridPos": {"x": 6, "y": 8, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "celery_workers_active{job=\"celery-workers\"}",
+          "legendFormat": "Active Workers"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "PostgreSQL Active Connections",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 4},
+      "targets": [
+        {
+          "expr": "pg_stat_activity_count{job=\"postgres\",state=\"active\"}",
+          "legendFormat": "Active Connections"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "API Error Rate (5xx)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"graphnebula-backend\",status=~\"5..\"}[5m])",
+          "legendFormat": "5xx errors"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Backend Pod Memory (MB)",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "container_memory_usage_bytes{namespace=\"graphnebula\",container=\"backend\"} / 1024 / 1024",
+          "legendFormat": "{{pod}}"
+        }
+      ]
+    }
+  ]
+}
