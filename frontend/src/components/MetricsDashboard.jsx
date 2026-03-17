@@ -9,8 +9,10 @@ const BAR_COLORS = [
   'rgba(16,185,129,0.85)', 'rgba(245,158,11,0.85)', 'rgba(249,115,22,0.85)',
 ];
 
-const baseLayout = {
-  margin: { l: 36, r: 10, t: 8, b: 52 },
+// Factory — returns a NEW object every call so Plotly can't mutate a shared reference
+const makeLayout = () => ({
+  autosize: true,
+  margin: { l: 38, r: 10, t: 8, b: 52 },
   paper_bgcolor: 'transparent',
   plot_bgcolor: 'transparent',
   font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
@@ -27,8 +29,7 @@ const baseLayout = {
     zeroline: false,
   },
   bargap: 0.38,
-  height: 195,
-};
+});
 
 const MetricsDashboard = ({ datasetId, refreshKey }) => {
   const [metrics, setMetrics] = useState([]);
@@ -49,9 +50,14 @@ const MetricsDashboard = ({ datasetId, refreshKey }) => {
     );
   }
 
-  const algorithms = metrics.map(m => m.algorithm);
-  const modularity = metrics.map(m => +(m.modularity ?? 0).toFixed(4));
-  const times      = metrics.map(m => m.execution_time_ms);
+  // Keep only the latest run per algorithm (backend returns oldest-first)
+  const latest = Object.values(
+    metrics.reduce((acc, m) => { acc[m.algorithm] = m; return acc; }, {})
+  );
+
+  const algorithms = latest.map(m => m.algorithm);
+  const modularity = latest.map(m => +(m.modularity ?? 0).toFixed(4));
+  const times      = latest.map(m => m.execution_time_ms);
 
   return (
     <div className="metrics-wrap">
@@ -69,7 +75,7 @@ const MetricsDashboard = ({ datasetId, refreshKey }) => {
             },
             hovertemplate: '<b>%{x}</b><br>Modularity: %{y:.4f}<extra></extra>',
           }]}
-          layout={baseLayout}
+          layout={makeLayout()}
           config={CHART_CONFIG}
           style={{ width: '100%' }}
           useResizeHandler
@@ -89,7 +95,7 @@ const MetricsDashboard = ({ datasetId, refreshKey }) => {
             },
             hovertemplate: '<b>%{x}</b><br>Time: %{y} ms<extra></extra>',
           }]}
-          layout={baseLayout}
+          layout={makeLayout()}
           config={CHART_CONFIG}
           style={{ width: '100%' }}
           useResizeHandler
@@ -97,7 +103,7 @@ const MetricsDashboard = ({ datasetId, refreshKey }) => {
       </div>
 
       <div style={{ fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
-        {metrics.length} run{metrics.length !== 1 ? 's' : ''} recorded for this dataset
+        {metrics.length} run{metrics.length !== 1 ? 's' : ''} recorded · {latest.length} algorithm{latest.length !== 1 ? 's' : ''} shown
       </div>
 
     </div>

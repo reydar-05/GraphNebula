@@ -53,7 +53,8 @@ const App = () => {
   const handleAlgoComplete = (result) => {
     setAlgoResult(result);
     setMetricsKey(k => k + 1);
-    fetchGraphData();
+    // Small delay lets Neo4j finish committing community_id writes before we fetch
+    setTimeout(() => fetchGraphData(datasetId), 800);
   };
 
   const cyStyle = [
