@@ -6,16 +6,19 @@ import MetricsDashboard from './components/MetricsDashboard';
 import AlgorithmRunner from './components/AlgorithmRunner';
 import './App.css';
 
-const COMMUNITY_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+const COMMUNITY_COLORS = [
+  '#6366f1', '#f59e0b', '#10b981', '#ef4444',
+  '#8b5cf6', '#ec4899', '#06b6d4', '#f97316',
+];
 
 const App = () => {
   const [datasetId, setDatasetId]       = useState(null);
-  const [datasetInfo, setDatasetInfo]   = useState(null);   // { name, num_nodes, num_edges }
+  const [datasetInfo, setDatasetInfo]   = useState(null);
   const [elements, setElements]         = useState([]);
   const [loadingGraph, setLoadingGraph] = useState(false);
-  const [graphStats, setGraphStats]     = useState(null);   // { nodes, edges, communities }
-  const [metricsKey, setMetricsKey]     = useState(0);      // increment to force metrics re-fetch
-  const [algoResult, setAlgoResult]     = useState(null);   // last algorithm result
+  const [graphStats, setGraphStats]     = useState(null);
+  const [metricsKey, setMetricsKey]     = useState(0);
+  const [algoResult, setAlgoResult]     = useState(null);
 
   const fetchGraphData = async (id) => {
     const targetId = id ?? datasetId;
@@ -25,11 +28,11 @@ const App = () => {
       const res = await api.get(`/visualization/${targetId}?limit=1200`);
       const elems = res.data.elements;
       setElements(elems);
-
-      // Compute graph stats from returned elements
       const nodes = elems.filter(e => e.data && !e.data.source);
       const edges = elems.filter(e => e.data && e.data.source);
-      const communities = new Set(nodes.map(n => n.data.community).filter(c => c !== null && c !== undefined && c !== ''));
+      const communities = new Set(
+        nodes.map(n => n.data.community).filter(c => c !== null && c !== undefined && c !== '')
+      );
       setGraphStats({ nodes: nodes.length, edges: edges.length, communities: communities.size });
     } catch {
       setElements([]);
@@ -38,9 +41,7 @@ const App = () => {
     setLoadingGraph(false);
   };
 
-  useEffect(() => {
-    if (datasetId) fetchGraphData(datasetId);
-  }, [datasetId]);
+  useEffect(() => { if (datasetId) fetchGraphData(datasetId); }, [datasetId]);
 
   const handleUploadSuccess = (id, info) => {
     setDatasetId(id);
@@ -59,130 +60,183 @@ const App = () => {
     {
       selector: 'node',
       style: {
-        'width': 10,
-        'height': 10,
+        'width': 9,
+        'height': 9,
         'background-color': (node) => {
           const raw = node.data('community');
-          // null/undefined means the node has no community assigned yet
-          if (raw === null || raw === undefined || raw === '') return '#d1d5db';
+          if (raw === null || raw === undefined || raw === '') return '#1e293b';
           return COMMUNITY_COLORS[parseInt(raw, 10) % COMMUNITY_COLORS.length];
         },
-        'border-width': 1,
-        'border-color': '#ffffff',
-        'label': '',   // hide labels on large graphs — too cluttered
+        'border-width': 0,
+        'shadow-blur': 10,
+        'shadow-color': (node) => {
+          const raw = node.data('community');
+          if (raw === null || raw === undefined || raw === '') return '#1e293b';
+          return COMMUNITY_COLORS[parseInt(raw, 10) % COMMUNITY_COLORS.length];
+        },
+        'shadow-opacity': 0.9,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 0,
       },
     },
     {
       selector: 'edge',
-      style: { 'width': 0.5, 'line-color': '#e5e7eb', 'curve-style': 'haystack' },
+      style: {
+        'width': 0.4,
+        'line-color': 'rgba(99,102,241,0.12)',
+        'curve-style': 'haystack',
+      },
     },
   ];
 
   const hasData = elements.length > 0;
   const hasCommunities = graphStats && graphStats.communities > 0;
 
-  return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', padding: '24px', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+  const cardState = (base) => {
+    if (base === 'step1') return datasetId ? 'done' : 'active';
+    if (base === 'step2') return datasetId && !hasCommunities ? 'active' : datasetId ? 'done' : '';
+    return 'info';
+  };
 
-        {/* Header */}
-        <header style={{ marginBottom: '24px' }}>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#0f172a' }}>
-            GraphNebula — Community Detection Platform
-          </h1>
-          <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '14px' }}>
-            Upload an edge-list dataset, run a detection algorithm, and explore community structure.
+  return (
+    <div className="app-bg">
+      <div className="app-container">
+
+        {/* ── Header ── */}
+        <header className="app-header">
+          <div className="app-logo-row">
+            <div className="app-logo-icon">⬡</div>
+            <h1 className="app-title">GraphNebula</h1>
+          </div>
+          <p className="app-subtitle">
+            Community Detection Platform — upload a graph, run algorithms, explore structure.
           </p>
         </header>
 
-        {/* Workflow strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+        {/* ── Workflow strip ── */}
+        <div className="workflow-grid">
 
-          {/* Step 1 — Upload */}
-          <div style={cardStyle(datasetId ? 'done' : 'active')}>
-            <StepBadge n={1} done={!!datasetId} />
+          {/* Step 1 */}
+          <div className={`glass-card step-card state-${cardState('step1')}`}>
+            <StepBadge n={1} done={!!datasetId} label="Upload" />
             <DatasetManager onUploadSuccess={handleUploadSuccess} />
           </div>
 
-          {/* Step 2 — Run Algorithm */}
-          <div style={cardStyle(datasetId && !hasCommunities ? 'active' : datasetId ? 'done' : 'idle')}>
-            <StepBadge n={2} done={hasCommunities} />
+          {/* Step 2 */}
+          <div className={`glass-card step-card state-${cardState('step2')}`}>
+            <StepBadge n={2} done={hasCommunities} label="Detect" />
             {!datasetId ? (
-              <div style={idleHint}>Upload a dataset first to enable algorithm selection.</div>
+              <p className="idle-hint">Upload a dataset first to unlock algorithm selection.</p>
             ) : (
               <AlgorithmRunner datasetId={datasetId} onRunComplete={handleAlgoComplete} />
             )}
             {algoResult && (
-              <div style={successBanner}>
-                ✓ {algoResult.algorithm} found <strong>{algoResult.communities_found}</strong> communities
-                &nbsp;·&nbsp; modularity <strong>{algoResult.modularity?.toFixed(3)}</strong>
+              <div className="success-banner">
+                ✓&nbsp;<strong>{algoResult.algorithm}</strong> found&nbsp;
+                <strong>{algoResult.communities_found}</strong> communities
+                &nbsp;·&nbsp;modularity&nbsp;<strong>{algoResult.modularity?.toFixed(3)}</strong>
               </div>
             )}
           </div>
 
           {/* Step 3 — Status */}
-          <div style={cardStyle('info')}>
-            <StepBadge n={3} done={hasCommunities} />
-            <h3 style={stepTitle}>Active Dataset</h3>
+          <div className="glass-card step-card state-info">
+            <StepBadge n={3} done={hasCommunities} label="Inspect" />
+            <p className="step-title" style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12 }}>
+              ACTIVE DATASET
+            </p>
             {!datasetId ? (
-              <div style={idleHint}>No dataset loaded yet.</div>
+              <p className="idle-hint">No dataset loaded yet.</p>
             ) : (
-              <div style={{ fontSize: '13px', lineHeight: '1.8', color: '#334155' }}>
-                <div><span style={label}>Name:</span> {datasetInfo?.name ?? `Dataset #${datasetId}`}</div>
-                <div><span style={label}>ID:</span> {datasetId}</div>
-                <div><span style={label}>Total nodes:</span> {datasetInfo?.num_nodes?.toLocaleString() ?? '—'}</div>
-                <div><span style={label}>Total edges:</span> {datasetInfo?.num_edges?.toLocaleString() ?? '—'}</div>
+              <div className="dataset-info-grid fade-in">
+                <div className="info-row">
+                  <span className="info-key">Name</span>
+                  <span className="info-val">{datasetInfo?.name ?? `Dataset #${datasetId}`}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-key">Dataset ID</span>
+                  <span className="info-val">{datasetId}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-key">Total nodes</span>
+                  <span className="info-val">{datasetInfo?.num_nodes?.toLocaleString() ?? '—'}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-key">Total edges</span>
+                  <span className="info-val">{datasetInfo?.num_edges?.toLocaleString() ?? '—'}</span>
+                </div>
                 {graphStats && <>
-                  <div><span style={label}>Showing:</span> {graphStats.nodes} nodes · {graphStats.edges} edges <span style={{ color: '#94a3b8' }}>(1 200-edge sample)</span></div>
-                  <div><span style={label}>Communities:</span> {hasCommunities ? <strong style={{ color: '#10b981' }}>{graphStats.communities} detected</strong> : <span style={{ color: '#94a3b8' }}>none yet — run an algorithm</span>}</div>
+                  <div className="info-row">
+                    <span className="info-key">Showing</span>
+                    <span className="info-val">
+                      {graphStats.nodes} nodes · {graphStats.edges} edges
+                      <span className="info-val muted" style={{ marginLeft: 4 }}>(1 200-edge sample)</span>
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-key">Communities</span>
+                    {hasCommunities
+                      ? <span className="info-val highlight">{graphStats.communities} detected</span>
+                      : <span className="info-val muted">none yet</span>
+                    }
+                  </div>
                 </>}
               </div>
             )}
           </div>
+
         </div>
 
-        {/* Main dashboard */}
-        <div style={{ display: 'flex', gap: '20px', height: '640px' }}>
+        {/* ── Main dashboard ── */}
+        <div className="dashboard-row">
 
           {/* Graph panel */}
-          <div style={{ flex: '0 0 65%', background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,.1)', overflow: 'hidden', position: 'relative' }}>
-
-            {/* Graph toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-              <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Network Graph</span>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="glass-card graph-panel">
+            <div className="panel-header">
+              <span className="panel-title">
+                <span className="panel-dot" />
+                Network Graph
+              </span>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 {hasCommunities && (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div className="community-legend">
                     {COMMUNITY_COLORS.slice(0, Math.min(graphStats.communities, 8)).map((color, i) => (
-                      <span key={i} title={`Community ${i + 1}`} style={{ width: 12, height: 12, borderRadius: '50%', background: color, display: 'inline-block' }} />
+                      <span
+                        key={i}
+                        className="community-dot"
+                        title={`Community ${i + 1}`}
+                        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+                      />
                     ))}
-                    <span style={{ fontSize: '12px', color: '#64748b', marginLeft: 2 }}>communities</span>
+                    <span className="legend-label">communities</span>
                   </div>
                 )}
                 {!hasCommunities && hasData && (
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>All nodes gray — run an algorithm to assign communities</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Run an algorithm to colour communities
+                  </span>
                 )}
                 <button
+                  className="btn-ghost"
                   onClick={() => fetchGraphData()}
                   disabled={loadingGraph || !datasetId}
-                  style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', color: '#475569' }}
                 >
-                  {loadingGraph ? 'Loading…' : '↻ Refresh'}
+                  {loadingGraph ? '…' : '↻ Refresh'}
                 </button>
               </div>
             </div>
 
-            {/* Empty state */}
             {!hasData && !loadingGraph && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100% - 41px)', color: '#94a3b8', gap: '8px' }}>
-                <div style={{ fontSize: '40px' }}>⬡</div>
-                <div style={{ fontSize: '14px' }}>Upload a dataset to visualise its graph</div>
+              <div className="empty-state">
+                <div className="empty-icon">⬡</div>
+                <p className="empty-text">Upload a dataset to visualise its graph</p>
               </div>
             )}
 
             {loadingGraph && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.7)', zIndex: 10, fontSize: '14px', color: '#64748b' }}>
-                Loading network topology…
+              <div className="loading-overlay">
+                <div className="spinner" />
+                <span className="loading-text">Loading network topology…</span>
               </div>
             )}
 
@@ -190,7 +244,11 @@ const App = () => {
               <CytoscapeComponent
                 elements={elements}
                 stylesheet={cyStyle}
-                style={{ width: '100%', height: 'calc(100% - 41px)' }}
+                style={{
+                  width: '100%',
+                  height: 'calc(100% - 45px)',
+                  background: 'transparent',
+                }}
                 layout={{ name: 'cose', animate: false, randomize: false, nodeRepulsion: 4096, idealEdgeLength: 32, gravity: 80 }}
                 wheelSensitivity={0.2}
                 minZoom={0.05}
@@ -200,13 +258,18 @@ const App = () => {
           </div>
 
           {/* Metrics panel */}
-          <div style={{ flex: 1, background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-              <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>Algorithm Performance</span>
+          <div className="glass-card metrics-panel">
+            <div className="panel-header">
+              <span className="panel-title">
+                <span className="panel-dot green" />
+                Algorithm Performance
+              </span>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {!datasetId ? (
-                <div style={idleHint}>Metrics will appear here after you run an algorithm.</div>
+                <p className="idle-hint" style={{ paddingTop: 16 }}>
+                  Metrics will appear here after you run an algorithm.
+                </p>
               ) : (
                 <MetricsDashboard datasetId={datasetId} refreshKey={metricsKey} />
               )}
@@ -219,33 +282,14 @@ const App = () => {
   );
 };
 
-// ── Small helpers ──────────────────────────────────────────────────────────────
-
-const StepBadge = ({ n, done }) => (
-  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-    <span style={{
-      width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: '12px', fontWeight: 700,
-      background: done ? '#10b981' : '#3b82f6', color: 'white',
-    }}>{done ? '✓' : n}</span>
-    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Step {n}</span>
+/* ── Helpers ────────────────────────────────────────────────────────────────── */
+const StepBadge = ({ n, done, label }) => (
+  <div className="step-badge">
+    <span className={`step-number ${done ? 'done' : 'pending'}`}>
+      {done ? '✓' : n}
+    </span>
+    <span className="step-label">{label}</span>
   </div>
 );
-
-const cardStyle = (state) => ({
-  background: 'white',
-  borderRadius: '12px',
-  padding: '16px 20px',
-  boxShadow: '0 1px 3px rgba(0,0,0,.08)',
-  border: `1.5px solid ${state === 'active' ? '#3b82f6' : state === 'done' ? '#10b981' : '#f1f5f9'}`,
-});
-
-const stepTitle  = { margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#0f172a' };
-const idleHint   = { fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' };
-const label      = { color: '#94a3b8', marginRight: '6px', fontSize: '12px' };
-const successBanner = {
-  marginTop: '10px', padding: '8px 12px', borderRadius: '8px',
-  background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: '13px',
-};
 
 export default App;

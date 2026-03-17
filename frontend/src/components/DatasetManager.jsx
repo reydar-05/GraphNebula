@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import api from '../api/client';
 
 const DatasetManager = ({ onUploadSuccess }) => {
-  const [file, setFile]         = useState(null);
+  const [file, setFile]           = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [result, setResult]     = useState(null);   // { dataset_id, num_nodes, num_edges }
-  const [error, setError]       = useState('');
+  const [result, setResult]       = useState(null);
+  const [error, setError]         = useState('');
 
   const handleUpload = async () => {
     if (!file) return;
@@ -25,45 +25,52 @@ const DatasetManager = ({ onUploadSuccess }) => {
     setUploading(false);
   };
 
+  const btnClass = uploading ? 'loading' : file ? 'ready' : 'disabled';
+
   return (
     <div>
-      <h3 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
-        Upload SNAP Edge List
-      </h3>
-      <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#64748b' }}>
-        Accepts .txt or .csv files in <code>node1 node2</code> format (lines starting with # are ignored).
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+        Accepts{' '}
+        <code style={{ color: 'var(--indigo)', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4 }}>.txt</code>
+        {' '}or{' '}
+        <code style={{ color: 'var(--indigo)', background: 'rgba(99,102,241,0.1)', padding: '1px 5px', borderRadius: 4 }}>.csv</code>
+        {' '}edge lists in <em>node1 node2</em> format.
       </p>
 
-      <input
-        type="file"
-        accept=".txt,.csv"
-        onChange={(e) => { setFile(e.target.files[0]); setResult(null); setError(''); }}
-        style={{ fontSize: '13px', marginBottom: '10px', display: 'block', width: '100%' }}
-      />
+      <div className="upload-area">
+        <input
+          type="file"
+          accept=".txt,.csv"
+          onChange={(e) => { setFile(e.target.files[0]); setResult(null); setError(''); }}
+        />
+        <div className="upload-icon">📂</div>
+        <p className="upload-label">
+          {file ? 'File selected' : 'Click or drag a file here'}
+        </p>
+        {file
+          ? <p className="upload-filename">⬡ {file.name}</p>
+          : <p className="upload-sublabel">.txt or .csv — SNAP edge-list format</p>
+        }
+      </div>
 
       <button
+        className={`btn-primary ${btnClass}`}
         onClick={handleUpload}
         disabled={uploading || !file}
-        style={{
-          padding: '7px 16px', borderRadius: '7px', border: 'none', cursor: file && !uploading ? 'pointer' : 'not-allowed',
-          background: file && !uploading ? '#3b82f6' : '#cbd5e1', color: 'white', fontWeight: 600, fontSize: '13px',
-        }}
       >
-        {uploading ? 'Ingesting…' : 'Upload & Ingest'}
+        {uploading ? '⟳  Ingesting…' : '↑  Upload & Ingest'}
       </button>
 
       {result && (
-        <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: '13px', color: '#166534' }}>
-          ✓ Ingested — <strong>{result.num_nodes?.toLocaleString()}</strong> nodes,{' '}
-          <strong>{result.num_edges?.toLocaleString()}</strong> edges &nbsp;·&nbsp; Dataset ID: <strong>{result.dataset_id}</strong>
+        <div className="alert-success">
+          ✓ Ingested successfully —{' '}
+          <strong>{result.num_nodes?.toLocaleString()}</strong> nodes,{' '}
+          <strong>{result.num_edges?.toLocaleString()}</strong> edges
+          {' '}· Dataset ID: <strong>{result.dataset_id}</strong>
         </div>
       )}
 
-      {error && (
-        <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', fontSize: '13px', color: '#991b1b' }}>
-          ✗ {error}
-        </div>
-      )}
+      {error && <div className="alert-error">✗ {error}</div>}
     </div>
   );
 };

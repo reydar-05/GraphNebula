@@ -2,6 +2,34 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import Plot from 'react-plotly.js';
 
+const CHART_CONFIG = { displayModeBar: false, responsive: true };
+
+const BAR_COLORS = [
+  'rgba(99,102,241,0.85)', 'rgba(139,92,246,0.85)', 'rgba(6,182,212,0.85)',
+  'rgba(16,185,129,0.85)', 'rgba(245,158,11,0.85)', 'rgba(249,115,22,0.85)',
+];
+
+const baseLayout = {
+  margin: { l: 36, r: 10, t: 8, b: 52 },
+  paper_bgcolor: 'transparent',
+  plot_bgcolor: 'transparent',
+  font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+  xaxis: {
+    tickfont: { size: 10, color: '#64748b' },
+    gridcolor: 'rgba(255,255,255,0.04)',
+    linecolor: 'rgba(255,255,255,0.06)',
+    tickangle: -15,
+  },
+  yaxis: {
+    tickfont: { size: 10, color: '#64748b' },
+    gridcolor: 'rgba(255,255,255,0.05)',
+    linecolor: 'rgba(255,255,255,0.06)',
+    zeroline: false,
+  },
+  bargap: 0.38,
+  height: 195,
+};
+
 const MetricsDashboard = ({ datasetId, refreshKey }) => {
   const [metrics, setMetrics] = useState([]);
 
@@ -10,57 +38,68 @@ const MetricsDashboard = ({ datasetId, refreshKey }) => {
     api.get(`/metrics/${datasetId}`)
       .then(res => setMetrics(res.data.metrics))
       .catch(() => setMetrics([]));
-  }, [datasetId, refreshKey]); // refreshKey increments each time an algo finishes
+  }, [datasetId, refreshKey]);
 
   if (metrics.length === 0) {
     return (
-      <div style={{ color: '#6b7280', fontStyle: 'italic', marginTop: '20px' }}>
-        No algorithm metrics found for Dataset {datasetId}. Run an algorithm via the API to see data here.
-      </div>
+      <p className="metrics-empty">
+        No runs yet for dataset {datasetId}.<br />
+        Execute an algorithm to see metrics here.
+      </p>
     );
   }
 
   const algorithms = metrics.map(m => m.algorithm);
-  const modularity = metrics.map(m => m.modularity);
-  const times = metrics.map(m => m.execution_time_ms);
+  const modularity = metrics.map(m => +(m.modularity ?? 0).toFixed(4));
+  const times      = metrics.map(m => m.execution_time_ms);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', marginTop: '10px' }}>
-      <Plot
-        data={[{ 
-          x: algorithms, 
-          y: modularity, 
-          type: 'bar', 
-          marker: { color: '#3b82f6' } 
-        }]}
-        layout={{ 
-          title: 'Modularity Score (Higher is better)', 
-          width: 350, 
-          height: 250, 
-          margin: { l: 40, r: 20, t: 40, b: 40 },
-          paper_bgcolor: 'rgba(0,0,0,0)',
-          plot_bgcolor: 'rgba(0,0,0,0)'
-        }}
-        config={{ displayModeBar: false }}
-      />
-      
-      <Plot
-        data={[{ 
-          x: algorithms, 
-          y: times, 
-          type: 'bar', 
-          marker: { color: '#f59e0b' } 
-        }]}
-        layout={{ 
-          title: 'Execution Time (ms) (Lower is better)', 
-          width: 350, 
-          height: 250, 
-          margin: { l: 40, r: 20, t: 40, b: 40 },
-          paper_bgcolor: 'rgba(0,0,0,0)',
-          plot_bgcolor: 'rgba(0,0,0,0)'
-        }}
-        config={{ displayModeBar: false }}
-      />
+    <div className="metrics-wrap">
+
+      <div>
+        <p className="chart-label">Modularity Score &uarr; higher is better</p>
+        <Plot
+          data={[{
+            x: algorithms,
+            y: modularity,
+            type: 'bar',
+            marker: {
+              color: algorithms.map((_, i) => BAR_COLORS[i % BAR_COLORS.length]),
+              line: { width: 0 },
+            },
+            hovertemplate: '<b>%{x}</b><br>Modularity: %{y:.4f}<extra></extra>',
+          }]}
+          layout={baseLayout}
+          config={CHART_CONFIG}
+          style={{ width: '100%' }}
+          useResizeHandler
+        />
+      </div>
+
+      <div>
+        <p className="chart-label">Execution Time (ms) &darr; lower is better</p>
+        <Plot
+          data={[{
+            x: algorithms,
+            y: times,
+            type: 'bar',
+            marker: {
+              color: algorithms.map((_, i) => BAR_COLORS[(i + 2) % BAR_COLORS.length]),
+              line: { width: 0 },
+            },
+            hovertemplate: '<b>%{x}</b><br>Time: %{y} ms<extra></extra>',
+          }]}
+          layout={baseLayout}
+          config={CHART_CONFIG}
+          style={{ width: '100%' }}
+          useResizeHandler
+        />
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+        {metrics.length} run{metrics.length !== 1 ? 's' : ''} recorded for this dataset
+      </div>
+
     </div>
   );
 };
