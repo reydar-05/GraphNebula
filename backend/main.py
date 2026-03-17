@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine
 from neo4j import GraphDatabase
@@ -12,6 +12,7 @@ from backend.api.algorithms import router as algo_router
 from backend.api.ml import router as ml_router
 from backend.api.visualization import router as vis_router
 from backend.api.metrics import router as metrics_router
+from backend.core.auth import verify_api_key
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,14 +28,18 @@ REDIS_HOST = os.environ["REDIS_HOST"]
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 
-app = FastAPI(title="Community Detection API", version="1.0.0")
+app = FastAPI(
+    title="Community Detection API",
+    version="1.0.0",
+    dependencies=[Depends(verify_api_key)],
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 app.include_router(upload_router, tags=["Data Ingestion"])

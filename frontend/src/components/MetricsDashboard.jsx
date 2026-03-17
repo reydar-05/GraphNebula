@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import Plot from 'react-plotly.js';
 
-const MetricsDashboard = ({ datasetId }) => {
+const MetricsDashboard = ({ datasetId, refreshKey }) => {
   const [metrics, setMetrics] = useState([]);
 
   useEffect(() => {
     if (!datasetId) return;
     api.get(`/metrics/${datasetId}`)
       .then(res => setMetrics(res.data.metrics))
-      .catch(err => console.error("No metrics yet or error fetching:", err));
-  }, [datasetId]);
+      .catch(() => setMetrics([]));
+  }, [datasetId, refreshKey]); // refreshKey increments each time an algo finishes
 
   if (metrics.length === 0) {
     return (

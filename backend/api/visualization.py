@@ -10,8 +10,8 @@ async def get_graph_visualization(dataset_id: int, limit: int = 500):
     # New query: Grab valid paths so the graph looks like a real web!
     query = """
     MATCH (n1:Node)-[:CONNECTED_TO]->(n2:Node)
-    RETURN n1.node_id AS source, coalesce(n1.community_id, 0) AS source_comm,
-           n2.node_id AS target, coalesce(n2.community_id, 0) AS target_comm
+    RETURN n1.node_id AS source, n1.community_id AS source_comm,
+           n2.node_id AS target, n2.community_id AS target_comm
     LIMIT $limit
     """
     

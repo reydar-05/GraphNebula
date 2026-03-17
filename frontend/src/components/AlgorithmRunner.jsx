@@ -45,9 +45,9 @@ const AlgorithmRunner = ({ datasetId, onRunComplete }) => {
         setStatusMsg('Running algorithm...');
       }
 
-      await pollStatus(taskId);
+      const result = await pollStatus(taskId);
       setStatusMsg('Done! Refreshing graph...');
-      onRunComplete();
+      onRunComplete(result);   // pass result up so App can show communities_found
       setStatusMsg('');
     } catch (err) {
       console.error(err);
@@ -70,6 +70,7 @@ const AlgorithmRunner = ({ datasetId, onRunComplete }) => {
           <option value="leiden">Leiden</option>
           <option value="label_propagation">Label Propagation</option>
           <option value="walktrap">Walktrap</option>
+          <option value="infomap">Infomap</option>
           <option value="slpa">SLPA (Overlapping)</option>
           <option value="graphsage">GraphSAGE (PyTorch ML)</option>
         </select>

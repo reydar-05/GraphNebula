@@ -33,3 +33,6 @@ redis==5.0.1
 
 # Observability
 prometheus-fastapi-instrumentator==6.1.0
+
+# ML Experiment Tracking
+mlflow==2.11.1
