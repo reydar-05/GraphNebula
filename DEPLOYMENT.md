@@ -1,153 +1,163 @@
 # GraphNebula — Production Deployment Guide
 
-This guide deploys GraphNebula to a public URL using **entirely free-tier** cloud services.
+Deploy the entire stack for **free**, with no service sleeping, no expiry dates, and no
+juggling five different platforms. Everything runs on one cloud VM using the same
+`docker-compose.yml` you already use locally.
 
 ---
 
-## Why not Vercel alone?
-
-Vercel is perfect for the React frontend, but the backend needs:
-- A **persistent process** for FastAPI (not serverless — Celery workers can't run as functions)
-- A **hosted graph database** (Neo4j)
-- A **hosted Redis** (Celery broker)
-- A **hosted PostgreSQL**
-
-**Solution:** Vercel for the frontend + Render.com for the backend stack.
-
----
-
-## Free-Tier Architecture
+## Architecture (2 services total)
 
 ```
 User Browser
      │
      ▼
-┌─────────────────────┐
-│  Vercel (Frontend)  │  https://graphnebula.vercel.app
-│  React + Vite SPA   │
-└──────────┬──────────┘
-           │ HTTPS  (X-API-Key header)
-           ▼
-┌─────────────────────────┐
-│  Render (Backend API)   │  https://graphnebula-api.onrender.com
-│  FastAPI + uvicorn      │
-└──────┬──────────────────┘
-       │
-       ├──────────────────────────────────────────┐
-       │                                          │
-┌──────▼──────────┐   ┌──────────────┐   ┌───────▼──────┐
-│  Neo4j Aura     │   │  Render PG   │   │  Upstash     │
-│  (Graph DB)     │   │  (PostgreSQL)│   │  (Redis)     │
-│  Free forever   │   │  Free 90d    │   │  Free always │
-└─────────────────┘   └──────────────┘   └──────────────┘
-                                                  │
-                                    ┌─────────────▼──────────┐
-                                    │  Render (Celery Worker) │
-                                    │  Background Worker      │
-                                    └────────────────────────┘
+┌──────────────────────────┐
+│  Vercel  (Frontend)      │  https://graphnebula.vercel.app
+│  React + Vite — free     │  Auto-deploys on git push
+└────────────┬─────────────┘
+             │ HTTPS  (X-API-Key header)
+             ▼
+┌────────────────────────────────────────────────────┐
+│        Oracle Cloud Free VM  (ARM A1)              │
+│        4 CPU cores · 24 GB RAM · free forever      │
+│                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │
+│  │   FastAPI    │  │    Neo4j     │  │ Postgres │ │
+│  │   uvicorn    │  │   (graph)    │  │  (SQL)   │ │
+│  └──────────────┘  └──────────────┘  └──────────┘ │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │
+│  │    Celery    │  │    Redis     │  │  MLflow  │ │
+│  │   (worker)   │  │  (broker)    │  │ (opt.)   │ │
+│  └──────────────┘  └──────────────┘  └──────────┘ │
+│                                                    │
+│  All started with: docker compose up -d            │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Step-by-Step Deployment
+## Why Oracle Cloud Free Tier?
 
-### Step 1 — Neo4j Aura (Graph Database)
-
-1. Go to **https://console.neo4j.io** → Sign up free
-2. Click **Create instance** → Choose **AuraDB Free**
-3. Name it `graphnebula`
-4. **Save the generated password** — you only see it once
-5. Note your **Connection URI** (looks like `neo4j+s://xxxxxxxx.databases.neo4j.io`)
-
-**Seed the constraints** (run locally, pointing at Aura):
-```powershell
-$env:NEO4J_URI      = 'neo4j+s://xxxxxxxx.databases.neo4j.io'
-$env:NEO4J_PASSWORD = 'your-aura-password'
-python database/init_neo4j.py
-```
-
-> Free tier limits: 50,000 nodes, 175,000 relationships.
-> `facebook_combined.txt` has ~4,000 nodes — well within limits.
-
----
-
-### Step 2 — Upstash Redis (Task Queue Broker)
-
-1. Go to **https://upstash.com** → Sign up free
-2. Click **Create Database** → Region: closest to you → Free tier
-3. Copy the **Redis URL** (format: `rediss://default:password@host:port`)
-
-> Free tier: 10,000 commands/day, 256 MB. Each algorithm run uses ~5–10 commands.
-
----
-
-### Step 3 — Render PostgreSQL (Relational Database)
-
-1. Go to **https://render.com** → Sign up → **New → PostgreSQL**
-2. Name: `graphnebula-db` → Instance type: **Free**
-3. Click **Create Database**
-4. Copy the **External Database URL** (starts with `postgresql://`)
-
-> Free tier: 1 GB, expires after **90 days**. After that, upgrade to $7/mo
-> or migrate to [Supabase](https://supabase.com) (also free, no expiry).
-
----
-
-### Step 4 — Render Web Service (FastAPI Backend)
-
-1. **New → Web Service** → Connect GitHub → select `reydar-05/GraphNebula`
-2. Configure:
-
-| Setting | Value |
+| Feature | Value |
 |---|---|
-| **Name** | `graphnebula-api` |
-| **Root directory** | *(leave blank — uses repo root)* |
-| **Runtime** | Python 3 |
-| **Build command** | `pip install -r requirements.txt` |
-| **Start command** | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
-| **Instance type** | Free |
+| CPU | 4 ARM Ampere cores |
+| RAM | 24 GB |
+| Storage | 200 GB |
+| Cost | **Free forever** (no expiry) |
+| Sleeping | **Never** |
+| What runs on it | Your entire `docker-compose.yml` unchanged |
 
-3. **Add Environment Variables** (in the "Environment" section):
+No Render 90-day PostgreSQL expiry. No service sleeping. No splitting your app across
+5 different platforms with 5 sets of env vars to keep in sync.
 
-```
-DATABASE_URL      = <External DB URL from Step 3>
-NEO4J_URI         = <Aura URI from Step 1>
-NEO4J_PASSWORD    = <Aura password from Step 1>
-REDIS_HOST        = <Upstash host only, no redis:// prefix>
-REDIS_URL         = <Full Upstash Redis URL from Step 2>
-ALLOWED_ORIGINS   = https://graphnebula.vercel.app
-API_KEY           = <choose a strong secret key>
-MLFLOW_TRACKING_URI = http://localhost:5000
-```
+---
 
-4. Click **Create Web Service** → wait for first deploy (~5 min)
-5. Note your service URL: `https://graphnebula-api.onrender.com`
+## Step 1 — Create Oracle Cloud VM
 
-**Run migrations** via the Render Shell (Service → Shell tab):
+1. Sign up at **https://cloud.oracle.com** (credit card required for identity verification only — you will not be charged)
+2. In the Oracle Cloud Console → **Compute → Instances → Create Instance**
+3. Configure:
+   - **Name:** `graphnebula`
+   - **Image:** Ubuntu 22.04
+   - **Shape:** Change shape → **Ampere → VM.Standard.A1.Flex**
+     - OCPUs: **4**, Memory: **24 GB** ← this is the Always Free allocation
+4. Under **Add SSH keys** → paste your public SSH key (or download the generated one)
+5. Click **Create** → wait ~2 minutes for the VM to start
+6. Note the **Public IP address** shown on the instance detail page
+
+---
+
+## Step 2 — Open Firewall Port
+
+Oracle blocks all ports by default. Open port 8000:
+
+1. Instance detail page → **Subnet** link → **Security List** → **Add Ingress Rule**
+2. Set:
+   - Source CIDR: `0.0.0.0/0`
+   - Destination port: `8000`
+3. Click **Add Ingress Rules**
+
+Also run this **inside the VM** after SSH-ing in (Step 3):
 ```bash
-python -m alembic upgrade head
+sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT
+sudo netfilter-persistent save
 ```
 
 ---
 
-### Step 5 — Render Background Worker (Celery)
+## Step 3 — Install Docker on the VM
 
-1. **New → Background Worker** → same GitHub repo
-2. Configure:
+SSH into your VM:
+```bash
+ssh ubuntu@YOUR_VM_IP
+```
 
-| Setting | Value |
-|---|---|
-| **Name** | `graphnebula-worker` |
-| **Build command** | `pip install -r requirements.txt` |
-| **Start command** | `celery -A backend.worker.celery_app worker --loglevel=info --concurrency=1` |
-| **Instance type** | Free |
+Install Docker:
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker ubuntu
+sudo systemctl enable docker
+# Log out and back in so the docker group takes effect
+exit
+ssh ubuntu@YOUR_VM_IP
+```
 
-3. Add the **same environment variables** as the Web Service (Steps 3–4)
-4. Click **Create Background Worker**
+Verify:
+```bash
+docker --version
+docker compose version
+```
 
 ---
 
-### Step 6 — Vercel (React Frontend)
+## Step 4 — Deploy the App
+
+```bash
+# Clone your repo
+git clone https://github.com/reydar-05/GraphNebula.git
+cd GraphNebula
+
+# Create your .env file
+nano .env
+```
+
+Paste the contents of your local `.env` into the file, but change these two lines:
+```
+DATABASE_URL=postgresql://graphuser:YOUR_PASSWORD@postgres:5432/graphdb
+NEO4J_URI=bolt://neo4j:7687
+```
+*(Use the Docker service names `postgres` and `neo4j` — not `localhost`)*
+
+Save and exit nano: `Ctrl+O` → Enter → `Ctrl+X`
+
+```bash
+# Start everything
+docker compose up -d
+
+# Wait ~60 seconds for Neo4j to initialise, then run:
+docker compose ps   # all services should show "healthy" or "running"
+
+# Run database migrations
+docker compose exec backend python -m alembic upgrade head
+
+# Initialise Neo4j constraints
+docker compose exec backend python database/init_neo4j.py
+```
+
+**Verify the backend is live:**
+```bash
+curl -H "X-API-Key: your-api-key" http://localhost:8000/health
+# Expected: {"api":"ok","postgres":"ok","neo4j":"ok","redis":"ok"}
+
+# Also test from your local machine:
+curl -H "X-API-Key: your-api-key" http://YOUR_VM_IP:8000/health
+```
+
+---
+
+## Step 5 — Deploy the Frontend on Vercel
 
 1. Go to **https://vercel.com** → Sign up with GitHub
 2. **Add New → Project** → Import `reydar-05/GraphNebula`
@@ -156,82 +166,88 @@ python -m alembic upgrade head
 | Setting | Value |
 |---|---|
 | **Root directory** | `frontend` |
-| **Framework preset** | Vite |
-| **Build command** | `npm run build` *(auto-detected)* |
-| **Output directory** | `dist` *(auto-detected)* |
+| **Framework preset** | Vite *(auto-detected)* |
 
-4. **Add Environment Variables**:
+4. **Environment Variables:**
 
-```
-VITE_API_BASE_URL = https://graphnebula-api.onrender.com
-VITE_API_KEY      = <same API key as Step 4>
-```
+| Key | Value |
+|---|---|
+| `VITE_API_BASE_URL` | `http://YOUR_VM_IP:8000` |
+| `VITE_API_KEY` | your API key (same as `API_KEY` in `.env`) |
 
-5. Click **Deploy** → your app will be live at `https://graphnebula.vercel.app`
+5. Click **Deploy** → your app is live at `https://graphnebula.vercel.app`
 
 ---
 
-### Step 7 — Verify the Deployment
+## Step 6 — Update CORS on the VM
 
-```powershell
-# 1. Check backend health (replace with your Render URL)
-Invoke-WebRequest `
-  -Uri "https://graphnebula-api.onrender.com/health" `
-  -Headers @{"X-API-Key" = "your-api-key"} |
-  Select-Object -ExpandProperty Content
+SSH back into the VM and update `ALLOWED_ORIGINS` in `.env`:
 
-# Expected: {"api":"ok","postgres":"ok","neo4j":"ok","redis":"ok"}
+```bash
+cd GraphNebula
+nano .env
+# Change: ALLOWED_ORIGINS=https://graphnebula.vercel.app
+```
 
-# 2. Open the frontend
-# https://graphnebula.vercel.app
-# Upload facebook_combined.txt → run Louvain → should detect communities
+Restart the backend to pick up the change:
+```bash
+docker compose restart backend
 ```
 
 ---
 
-## Auto-Deploy on Git Push
+## Step 7 — Verify End to End
 
-Both services auto-redeploy when you push to `main`:
-
-```powershell
-git push origin main
-# → Vercel rebuilds frontend (~1 min)
-# → Render rebuilds backend + worker (~3-5 min)
-```
+1. Open `https://graphnebula.vercel.app`
+2. Upload `facebook_combined.txt`
+3. Run **Louvain** → communities should appear on the graph
+4. Check **Algorithm Performance** panel — modularity score should show
 
 ---
 
-## Free Tier Limitations
+## Updating the App (Every Future Deploy)
 
-| Limitation | Impact | Workaround |
-|---|---|---|
-| Render sleeps after 15 min idle | First request takes ~30s to wake | Acceptable for portfolio/demo |
-| Neo4j Aura Free: 50k nodes | facebook_combined fits easily (4k nodes) | Use smaller datasets |
-| Upstash: 10k Redis ops/day | ~1,000 algorithm runs/day | Sufficient for demo |
-| Render PostgreSQL expires in 90 days | Need to migrate or upgrade | Migrate to Supabase free tier |
-| Render free: 512 MB RAM | GraphSAGE may OOM (large graphs) | Use classical algorithms in production |
+SSH into your VM and run:
+```bash
+cd GraphNebula
+git pull
+docker compose up -d --build
+```
+
+Vercel redeploys the frontend **automatically** on every `git push origin main` — no action needed.
+
+---
+
+## Service URLs (After Deployment)
+
+| Service | URL |
+|---|---|
+| Frontend | `https://graphnebula.vercel.app` |
+| Backend API | `http://YOUR_VM_IP:8000` |
+| API Docs (Swagger) | `http://YOUR_VM_IP:8000/docs` |
+| Neo4j Browser | `http://YOUR_VM_IP:7474` |
+| MLflow UI | `http://YOUR_VM_IP:5000` |
 
 ---
 
 ## Custom Domain (Optional)
 
-1. Buy a domain (e.g. Namecheap ~$10/yr)
-2. In Vercel: Project → Settings → Domains → Add your domain
-3. Follow Vercel's DNS instructions (add CNAME record at your registrar)
-4. Done — HTTPS is automatic
+If you want `https://graphnebula.com` instead of the raw IP:
+
+1. Buy a domain (~$10/yr at Namecheap or Porkbun)
+2. Add an **A record** pointing to `YOUR_VM_IP`
+3. In Vercel: Project → Settings → Domains → add your domain (HTTPS auto-configured)
+4. Update `VITE_API_BASE_URL` on Vercel to `https://api.yourdomain.com`
+5. Add a subdomain A record `api.yourdomain.com → YOUR_VM_IP`
 
 ---
 
-## Environment Variables Reference
+## Troubleshooting
 
-| Variable | Where set | Description |
-|---|---|---|
-| `DATABASE_URL` | Render (backend + worker) | Full PostgreSQL connection string |
-| `NEO4J_URI` | Render (backend + worker) | Neo4j Aura bolt URI |
-| `NEO4J_PASSWORD` | Render (backend + worker) | Neo4j Aura password |
-| `REDIS_URL` | Render (backend + worker) | Full Upstash Redis URL |
-| `REDIS_HOST` | Render (backend + worker) | Upstash host (no protocol) |
-| `API_KEY` | Render (backend + worker) | Shared secret for X-API-Key auth |
-| `ALLOWED_ORIGINS` | Render (backend) | Your Vercel URL (comma-separated) |
-| `VITE_API_BASE_URL` | Vercel (frontend) | Full Render backend URL |
-| `VITE_API_KEY` | Vercel (frontend) | Same as `API_KEY` above |
+| Problem | Fix |
+|---|---|
+| `curl: connection refused` on port 8000 | Check Oracle security list ingress rule + iptables rule |
+| Neo4j container keeps restarting | Give it 60s to initialise; run `docker compose logs neo4j` |
+| Frontend shows CORS error | Update `ALLOWED_ORIGINS` in `.env` on VM and `docker compose restart backend` |
+| `alembic upgrade head` fails | Check `DATABASE_URL` uses `postgres` hostname, not `localhost` |
+| VM is slow / out of memory | GraphSAGE on large graphs is memory-heavy; use classical algorithms for demos |
