@@ -37,3 +37,7 @@ Thumbs.db
 # ─── Docker volumes (local dev) ──────────────────────────────────────────────
 pgdata/
 neo4jdata/
+
+# ─── MLflow run data (use a remote tracking server in prod) ──────────────────
+mlruns/
+mlartifacts/
