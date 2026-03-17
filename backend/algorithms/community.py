@@ -24,7 +24,7 @@ def run_community_detection(dataset_id: int, algo_name: str):
     elif algo_name == "leiden":
         coms = algorithms.leiden(G)
     elif algo_name == "infomap":
-        coms = algorithms.infomap(G)
+        raise ValueError("Infomap is not supported on Windows (requires Linux/macOS).")
     elif algo_name == "label_propagation":
         coms = algorithms.label_propagation(G)
     elif algo_name == "walktrap":

@@ -70,7 +70,6 @@ const AlgorithmRunner = ({ datasetId, onRunComplete }) => {
           <option value="leiden">Leiden</option>
           <option value="label_propagation">Label Propagation</option>
           <option value="walktrap">Walktrap</option>
-          <option value="infomap">Infomap</option>
           <option value="slpa">SLPA (Overlapping)</option>
           <option value="graphsage">GraphSAGE (PyTorch ML)</option>
         </select>

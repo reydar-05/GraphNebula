@@ -14,11 +14,6 @@ import torch.nn.functional as F
 
 os.makedirs("backend/models/saved", exist_ok=True)
 
-# ── MLflow setup ──────────────────────────────────────────────────────────────
-MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-mlflow.set_tracking_uri(MLFLOW_URI)
-mlflow.set_experiment("graphsage-community-detection")
-
 
 def fetch_pyg_data_from_neo4j():
     """Fetches nodes, edges, and community labels from Neo4j and converts to PyG Data."""
@@ -55,6 +50,10 @@ def fetch_pyg_data_from_neo4j():
 def train_gnn_pipeline(dataset_id: int):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     start_time = time.time()
+
+    # ── MLflow setup (lazy — only when training runs) ─────────────────────────
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"))
+    mlflow.set_experiment("graphsage-community-detection")
 
     K = 5
     EMBEDDING_DIM = 64
